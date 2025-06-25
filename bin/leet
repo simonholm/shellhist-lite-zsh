@@ -1,0 +1,9 @@
+#!/data/data/com.termux/files/usr/bin/bash
+SCRIPT="$HOME/leet_converter.py"
+
+if [ ! -f "$SCRIPT" ]; then
+    echo "Error: Script not found at $SCRIPT"
+    exit 1
+fi
+
+python "$SCRIPT" "$@"

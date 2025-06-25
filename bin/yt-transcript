@@ -1,0 +1,145 @@
+#!/data/data/com.termux/files/usr/bin/python3
+# 📋 Vim clipboard diagnostic test for Termux & WSL
+auto_clipboard_test() {
+  echo "🔍 Detecting environment..."
+  if uname -a | grep -qi "android"; then
+    ENV="Termux"
+  elif uname -a | grep -qi "microsoft"; then
+    ENV="WSL"
+  else
+    ENV="Other"
+  fi
+  echo "📦 Environment: $ENV"
+  echo
+
+  echo "📄 Vim clipboard support:"
+  vim --version | grep clipboard || echo "⚠️ Vim not installed?"
+  echo
+
+  TEST_STRING="🧪 clipboard_test_$(date +%s)"
+  echo "$TEST_STRING" > /tmp/vim_clipboard_test.txt
+
+  echo "📋 Launching Vim to yank text..."
+  vim -es -u NONE -c "set clipboard=unnamedplus" \
+      -c "normal! gg\"+yy" -c "wq" /tmp/vim_clipboard_test.txt
+
+  echo "🔁 Reading clipboard content..."
+  if [[ "$ENV" == "Termux" ]]; then
+    if command -v termux-clipboard-get >/dev/null 2>&1; then
+      CLIP_CONTENT=$(termux-clipboard-get)
+    else
+      echo "❌ termux-clipboard-get not found. Install termux-api and Termux:API app."
+      return 1
+    fi
+  elif [[ "$ENV" == "WSL" ]]; then
+    if command -v xclip >/dev/null 2>&1; then
+      CLIP_CONTENT=$(xclip -o -selection clipboard)
+    else
+      echo "❌ xclip not found. Install with: sudo apt install xclip"
+      return 1
+    fi
+  else
+    echo "⚠️ Unknown environment. Can't verify clipboard."
+    return 1
+  fi
+
+  echo "📥 Clipboard content: '$CLIP_CONTENT'"
+  if [[ "$CLIP_CONTENT" == "$TEST_STRING" ]]; then
+    echo "✅ Clipboard test passed!"
+
+import re
+import argparse
+import subprocess
+import sys
+
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api._errors import (
+    TranscriptsDisabled,
+    NoTranscriptFound,
+    VideoUnavailable
+)
+
+def extract_video_id(url):
+    pattern = r'(?:v=|\/|embed\/|v\/|live\/|\.be\/|watch\?v=|\/live\/)([a-zA-Z0-9_-]{11})'
+    match = re.search(pattern, url)
+    return match.group(1) if match else None
+
+def save_transcript(video_id, transcript, with_timestamps=False, filename=None):
+    filename = filename or f"{video_id}_transcript.txt"
+    with open(filename, "w", encoding="utf-8") as file:
+        for entry in transcript:
+            if with_timestamps:
+                file.write(f"{entry['start']:.2f}s: {entry['text']}\n")
+            else:
+                file.write(entry['text'] + "\n")
+    return filename
+
+def extract_transcription(video_url, with_timestamps=False, output_filename=None):
+    try:
+        video_id = extract_video_id(video_url)
+        if not video_id:
+            raise ValueError("Video ID could not be extracted from the URL.")
+
+        try:
+            transcript = YouTubeTranscriptApi.get_transcript(video_id)
+            return save_transcript(video_id, transcript, with_timestamps, output_filename)
+        except (TranscriptsDisabled, NoTranscriptFound):
+            pass  # Try fallback below
+
+        transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+        options = list(transcripts._manually_created_transcripts.values()) + list(transcripts._generated_transcripts.values())
+
+        if not options:
+            raise NoTranscriptFound("No transcripts available.")
+
+        selected = options[0]  # Default to first available language
+        transcript = selected.fetch()
+        return save_transcript(video_id, transcript, with_timestamps, output_filename)
+
+    except VideoUnavailable:
+        print("Error: The video is unavailable.", file=sys.stderr)
+    except TranscriptsDisabled:
+        print("Error: Transcripts are disabled for this video.", file=sys.stderr)
+    except NoTranscriptFound:
+        print("Error: No transcript found for this video.", file=sys.stderr)
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+
+    return None
+
+def get_clipboard_text():
+    for cmd in [
+        ["termux-clipboard-get"],
+        ["xclip", "-selection", "clipboard", "-o"],
+        ["xsel", "--clipboard"]
+    ]:
+        try:
+            result = subprocess.check_output(cmd, text=True).strip()
+            if result:
+                return result
+        except Exception:
+            continue
+    return None
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Extract and save YouTube video transcripts.")
+    parser.add_argument('--url', help="YouTube video URL (optional, falls back to clipboard)")
+    parser.add_argument('--timestamps', action='store_true', help="Include timestamps in the output")
+    parser.add_argument('--output', help="Custom output filename (optional)")
+    parser.add_argument('--no-export', action='store_true', help="Do not export transcript to GitHub Gist")
+
+    args = parser.parse_args()
+
+    video_url = args.url or get_clipboard_text()
+    if not video_url:
+        print("Error: No URL provided and clipboard is empty or inaccessible.", file=sys.stderr)
+        sys.exit(1)
+
+    transcript_filename = extract_transcription(video_url, args.timestamps, args.output)
+
+    if transcript_filename and not args.no_export:
+        try:
+            subprocess.run(["gh", "gist", "create", transcript_filename], check=True)
+        except Exception as e:
+            print(f"Error exporting to Gist: {e}", file=sys.stderr)
+

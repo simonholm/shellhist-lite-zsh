@@ -1,0 +1,7 @@
+#!/data/data/com.termux/files/usr/bin/bash
+sqlite3 -cmd ".timeout 1000" ~/.local/share/shellhist/history.db "
+  SELECT printf('%s | %s | %s', datetime(timestamp, 'unixepoch', 'localtime'), cwd, cmd)
+  FROM history
+  ORDER BY id DESC LIMIT 5000;" |
+fzf --tac --ansi --height=80% --preview-window=wrap --prompt="History > " |
+cut -d'|' -f3- | sed 's/^ *//'
