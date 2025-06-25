@@ -43,3 +43,10 @@ cat setup/bashrc_snippet.sh >> ~/.bashrc
 - Outputs selected command to terminal; run via `eval "$(shist)"` if you want to execute
 
 MIT License
+
+# ShellHist Lite (Zsh/Termux)
+
+[![Shell](https://img.shields.io/badge/shell-zsh-blue.svg)](https://www.zsh.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A minimal shell history logger for Zsh and Termux, with SQLite + fzf integration.
