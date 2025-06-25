@@ -1,0 +1,10 @@
+# Ignore local SQLite history
+.local/
+*.db
+*.sqlite
+*.sqlite3
+
+# OS/editor clutter
+*.swp
+*.bak
+*~
